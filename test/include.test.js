@@ -512,6 +512,46 @@ describe(Support.getTestDialectTeaser("Include"), function () {
         })
       })
     })
+
+    it.only('should include associations where "as" and "foreignKey" has the same name', function(done) {
+      var User = this.sequelize.define('User', {})
+        , Item = this.sequelize.define('Item', {'test': DataTypes.STRING})
+
+      User.belongsTo(Item, {'as': 'itemA', 'foreignKey': 'itemA'})
+      User.belongsTo(Item, {'as': 'itemB', 'foreignKey': 'itemB'})
+
+      this.sequelize.sync().done(function() {
+        async.auto({
+          'user': function(callback) {
+            User.create().done(callback)
+          },
+          'items': function(callback) {
+            Item.bulkCreate([{'test': 'a'}, {'test': 'b'}]).done(function() {
+              Item.findAll().done(callback)
+            })
+          },
+          'associate': ['user', 'items', function(callback, results) {
+            var user = results.user
+            var tests = results.items
+
+            user.testA = tests[0]
+            user.testB = tests[1]
+
+            callback()
+          }]
+        }, function() {
+          User.findAll({'where': {'id': 1}, 'include': [{'model': Item, 'as': 'itemA'}, {'model': Item, 'as': 'itemB'}]}).done(function(err, user) {
+            expect(err).not.to.be.ok
+            expect(user).to.be.ok
+
+            expect(user.itemA.test).to.be.eql('itemA')
+            expect(user.itemB.test).to.be.eql('itemB')
+
+            done();
+          })
+        })
+      })
+    })
   })
 
   describe('findAndCountAll', function () {
